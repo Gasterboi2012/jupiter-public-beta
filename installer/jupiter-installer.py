@@ -124,6 +124,7 @@ COPR_REPOS = {
     "avengemedia/dms": "DMS",
     "avengemedia/danklinux": "DankLinux",
     "imput/helium": "Helium",
+    "lionheartp/Hyprland": "Hyprland",
 }
 
 
