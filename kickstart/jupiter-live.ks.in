@@ -21,6 +21,7 @@ repo --name=copr-helium --baseurl=https://download.copr.fedorainfracloud.org/res
 %packages --excludedocs
 @core
 kernel
+dracut-live
 dnf
 dnf-plugins-core
 python3
@@ -32,6 +33,7 @@ dosfstools
 e2fsprogs
 util-linux
 grub2-efi-x64
+grub2-efi-x64-cdboot
 grub2-efi-x64-modules
 grub2-pc
 shim-x64
