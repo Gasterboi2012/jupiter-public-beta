@@ -33,7 +33,9 @@ sed -e "s|@INSTALLER_B64@|$(b64 "$ROOT/installer/jupiter-installer.py")|" \
 
 ksvalidator -v F44 "$KS"
 
-mkdir -p "$OUT"
+# livemedia-creator refuses to run if --resultdir already exists, so let it
+# create a fresh directory inside the work dir and move the ISO out afterwards.
+RESULT="$WORK/result"
 livemedia-creator \
   --make-iso \
   --no-virt \
@@ -44,6 +46,8 @@ livemedia-creator \
   --iso-only \
   --iso-name "Jupiter-${VERSION}-x86_64.iso" \
   --tmp "$WORK/lmc" \
-  --resultdir "$OUT"
+  --resultdir "$RESULT"
 
+mkdir -p "$OUT"
+mv "$RESULT/Jupiter-${VERSION}-x86_64.iso" "$OUT/"
 echo "ISO written to $OUT/Jupiter-${VERSION}-x86_64.iso"
