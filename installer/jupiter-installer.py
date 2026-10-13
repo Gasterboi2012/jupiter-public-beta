@@ -23,7 +23,7 @@ import tarfile
 import textwrap
 import urllib.request
 
-RELEASE = "43"
+RELEASE = "44"
 TARGET = "/mnt/jupiter"
 LOG = "/tmp/jupiter-install.log"
 RPMFUSION_NONFREE = (

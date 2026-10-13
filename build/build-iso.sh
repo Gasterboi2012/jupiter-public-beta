@@ -31,7 +31,7 @@ sed -e "s|@INSTALLER_B64@|$(b64 "$ROOT/installer/jupiter-installer.py")|" \
     -e "s|@SERVICE_B64@|$(b64 "$ROOT/installer/jupiter-installer.service")|" \
     "$ROOT/kickstart/jupiter-live.ks.in" > "$KS"
 
-ksvalidator -v F43 "$KS"
+ksvalidator -v F44 "$KS"
 
 mkdir -p "$OUT"
 livemedia-creator \
@@ -39,8 +39,8 @@ livemedia-creator \
   --no-virt \
   --ks "$KS" \
   --project "Jupiter" \
-  --releasever 43 \
-  --volid "JUPITER-43" \
+  --releasever 44 \
+  --volid "JUPITER-44" \
   --iso-only \
   --iso-name "Jupiter-${VERSION}-x86_64.iso" \
   --tmp "$WORK/lmc" \

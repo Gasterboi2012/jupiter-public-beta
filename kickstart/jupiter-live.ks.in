@@ -1,4 +1,4 @@
-# Jupiter live installer image (Fedora 43, x86_64) - TEMPLATE.
+# Jupiter live installer image (Fedora 44, x86_64) - TEMPLATE.
 # build/build-iso.sh fills in @INSTALLER_B64@ and @SERVICE_B64@.
 lang en_US.UTF-8
 keyboard us
@@ -13,10 +13,10 @@ zerombr
 clearpart --all
 part / --size=6144 --fstype=ext4 --label=JUPITER-LIVE
 
-url --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=fedora-43&arch=$basearch
-repo --name=copr-dms --baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/dms/fedora-43-$basearch/
-repo --name=copr-danklinux --baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/danklinux/fedora-43-$basearch/
-repo --name=copr-helium --baseurl=https://download.copr.fedorainfracloud.org/results/imput/helium/fedora-43-$basearch/
+url --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=fedora-44&arch=$basearch
+repo --name=copr-dms --baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/dms/fedora-44-$basearch/
+repo --name=copr-danklinux --baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/danklinux/fedora-44-$basearch/
+repo --name=copr-helium --baseurl=https://download.copr.fedorainfracloud.org/results/imput/helium/fedora-44-$basearch/
 
 %packages --excludedocs
 @core
