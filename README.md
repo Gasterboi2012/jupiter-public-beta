@@ -2,22 +2,7 @@
 
 A minimal Fedora 44 live ISO that boots into a TUI installer. The installer
 asks for a GPU driver (NVIDIA open kernel modules or Mesa), a target disk, and
-a user account, then installs the Jupiter base:
-
-- **Helium** browser (`helium-bin`, COPR `imput/helium`)
-- **Hyprland** with the **Dank Material Shell** (`dms`, COPR `avengemedia/dms`)
-
-The installer first asks for a network connection (Ethernet is detected
-automatically; otherwise pick a Wi-Fi network). Any NetworkManager profile
-created in the live session is copied to the installed system.
-
-The installer also downloads **Iosevka Nerd Font Mono** (v3.5.1, SHA-256 checked)
-and sets it as the default terminal font for **foot**. A minimal **fastfetch**
-config with a placeholder ASCII logo runs in new interactive shells.
-
-The boot splash is a placeholder Plymouth theme (`jupiter`) written by the
-installer. Replace `SPLASH_FILES` in `installer/jupiter-installer.py` with your
-own artwork. GRUB and the wallpaper are unchanged.
+a user account, then installs the base:
 
 ## Layout
 
