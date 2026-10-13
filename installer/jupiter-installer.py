@@ -13,6 +13,7 @@ import curses
 import getpass
 import json
 import os
+import shutil
 import re
 import shlex
 import subprocess
@@ -35,12 +36,37 @@ BASE_PACKAGES = [
     # Hyprland + display manager
     "hyprland", "xdg-desktop-portal-hyprland", "sddm", "foot",
     "pipewire", "wireplumber", "grim", "slurp", "wl-clipboard",
-    "google-noto-sans-fonts", "papirus-icon-theme",
+    "google-noto-sans-fonts", "papirus-icon-theme", "plymouth", "plymouth-scripts",
     # Dank Material Shell (DMS) + Quickshell
     "dms", "quickshell", "dgop", "matugen", "cava",
     # Browser
     "helium-bin",
 ]
+
+# Placeholder boot splash. Replace the script/theme with your own artwork;
+# the installer writes this theme into the target and makes it the default.
+SPLASH_NAME = "jupiter"
+SPLASH_FILES = {
+    f"{SPLASH_NAME}.plymouth": """\
+[Plymouth Theme]
+Name=Jupiter
+Description=Jupiter placeholder boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/jupiter
+ScriptFile=/usr/share/plymouth/themes/jupiter/jupiter.script
+""",
+    f"{SPLASH_NAME}.script": """\
+# PLACEHOLDER splash - replace with your own artwork.
+Window.SetBackgroundTopColor(0.05, 0.05, 0.10);
+Window.SetBackgroundBottomColor(0.05, 0.05, 0.10);
+logo = Image.Text("Jupiter", 0.85, 0.75, 1.0);
+logo.SetX(Window.GetX() + Window.GetWidth() / 2 - logo.GetWidth() / 2);
+logo.SetY(Window.GetY() + Window.GetHeight() / 2 - logo.GetHeight() / 2);
+sprite = Sprite(logo);
+""",
+}
 
 NVIDIA_PACKAGES = ["akmod-nvidia-open", "xorg-x11-drv-nvidia-cuda"]
 NVIDIA_KARGS = "nvidia-drm.modeset=1 nvidia-drm.fbdev=1"
@@ -222,6 +248,56 @@ def run_step(desc, argv, dry, stdin_text=None):
     return 0
 
 
+# ---------------------------------------------------------------- network
+def network_online():
+    out = subprocess.run(["nmcli", "-t", "-f", "CONNECTIVITY", "general"],
+                         capture_output=True, text=True).stdout.strip()
+    return out == "full"
+
+
+def parse_wifi_list(text):
+    """Parse `nmcli -t -f SSID,SECURITY device wifi list` into [(ssid, sec)]."""
+    nets = {}
+    for line in text.splitlines():
+        # nmcli escapes literal colons in -t output as "\\:"
+        parts = re.split(r"(?<!\\):", line)
+        if len(parts) < 2:
+            continue
+        ssid = parts[0].replace("\\:", ":")
+        if ssid:
+            nets.setdefault(ssid, parts[-1].strip() or "open")
+    return sorted(nets.items())
+
+
+def scan_wifi():
+    out = subprocess.run(
+        ["nmcli", "-t", "-f", "SSID,SECURITY", "device", "wifi", "list",
+         "--rescan", "yes"], capture_output=True, text=True).stdout
+    return parse_wifi_list(out)
+
+
+def connect_wifi(ssid, password):
+    """Connect via NetworkManager. Returns (ok, message)."""
+    argv = ["nmcli", "device", "wifi", "connect", ssid]
+    if password:
+        argv += ["password", password]
+    proc = subprocess.run(argv, capture_output=True, text=True)
+    log(f"$ nmcli device wifi connect {shlex.quote(ssid)} (password hidden)")
+    log(proc.stdout + proc.stderr)
+    return proc.returncode == 0, (proc.stderr or proc.stdout).strip()
+
+
+def copy_network_profiles():
+    """Copy live-session NetworkManager profiles (e.g. Wi-Fi) to the target."""
+    src = "/etc/NetworkManager/system-connections"
+    dst = f"{TARGET}/etc/NetworkManager/system-connections"
+    if not os.path.isdir(src):
+        return
+    os.makedirs(dst, exist_ok=True)
+    for name in os.listdir(src):
+        shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
+
+
 # ---------------------------------------------------------------- TUI
 BANNER = r"""
      _   _   _ ____ ___ _____ _____ ____
@@ -316,6 +392,52 @@ def list_disks():
     return disks
 
 
+def wifi_flow(scr):
+    nets = scan_wifi()
+    if not nets:
+        draw_frame(scr, "No Wi-Fi networks found",
+                   "Check the Wi-Fi adapter, then try again.")
+        scr.getch()
+        return
+    idx = menu(scr, "Wi-Fi networks",
+               [f"{ssid}  [{sec}]" for ssid, sec in nets],
+               "Pick a network to join.")
+    if idx is None:
+        return
+    ssid, sec = nets[idx]
+    password = None
+    if sec != "open":
+        password = prompt_text(scr, f"Password for {ssid}", secret=True)
+        if password is None:
+            return
+        password = password or None
+    ok, msg = connect_wifi(ssid, password)
+    draw_frame(scr, "Connected" if ok else "Connection failed", msg[:200])
+    scr.getch()
+
+
+def network_screen(scr):
+    """Make sure there is a connection before anything is downloaded.
+
+    Returns True when online, False if the user skipped, None to quit.
+    """
+    while True:
+        if network_online():
+            return True
+        choice = menu(scr, "Network connection", [
+            "Connect to Wi-Fi",
+            "Check connection again",
+            "Skip (install will fail without network)",
+        ], "Jupiter downloads its packages during install. Plug in Ethernet "
+           "or connect to Wi-Fi first.")
+        if choice is None:
+            return None
+        if choice == 0:
+            wifi_flow(scr)
+        elif choice == 2:
+            return False
+
+
 def tui_flow(scr):
     """Returns dict(gpu, disk, username, password) or None if cancelled."""
     curses.curs_set(0)
@@ -325,6 +447,10 @@ def tui_flow(scr):
         curses.init_pair(1, curses.COLOR_MAGENTA, -1)
         curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_CYAN)
         curses.init_pair(3, curses.COLOR_RED, -1)
+
+    net = network_screen(scr)
+    if net is None:
+        return None
 
     gpu_idx = menu(scr, "Graphics driver", [
         "NVIDIA (open kernel modules, nvidia-open)",
@@ -370,7 +496,8 @@ def tui_flow(scr):
         scr.getch()
         return tui_flow(scr)
 
-    summary = (f"Disk: {disk}\nDriver: {'NVIDIA open' if gpu == 'nvidia' else 'Mesa (open)'}\n"
+    summary = (f"Network: {'online' if network_online() else 'offline'}\n"
+               f"Disk: {disk}\nDriver: {'NVIDIA open' if gpu == 'nvidia' else 'Mesa (open)'}\n"
                f"User: {username}\nBrowser: Helium\nDesktop: Hyprland + Dank Material Shell")
     ok = menu(scr, "Ready to install", ["Install Jupiter", "Cancel"], summary)
     if ok != 0:
@@ -393,9 +520,23 @@ def install(cfg, dry):
         os.makedirs(f"{TARGET}/etc", exist_ok=True)
         with open(f"{TARGET}/etc/fstab", "w") as fh:
             fh.write(fstab_text(root, esp))
+    if not dry:
+        copy_network_profiles()
     for desc, argv in post_install_plan(user, gpu):
         stdin_text = f"{user}:{pw}\n" if desc == "Setting user password" else None
         if run_step(desc, argv, dry, stdin_text) != 0:
+            return 1
+    if dry:
+        print("    [dry-run] write Plymouth theme 'jupiter' and rebuild initramfs")
+    else:
+        theme = f"{TARGET}/usr/share/plymouth/themes/{SPLASH_NAME}"
+        os.makedirs(theme, exist_ok=True)
+        for fname, body in SPLASH_FILES.items():
+            with open(os.path.join(theme, fname), "w") as fh:
+                fh.write(body)
+        if run_step("Setting boot splash (placeholder)",
+                    chroot(["plymouth-set-default-theme", "-R", SPLASH_NAME]),
+                    dry) != 0:
             return 1
     home = f"{TARGET}/home/{user}/.config/hypr"
     if dry:

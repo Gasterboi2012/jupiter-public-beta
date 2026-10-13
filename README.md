@@ -7,6 +7,14 @@ a user account, then installs the Jupiter base:
 - **Helium** browser (`helium-bin`, COPR `imput/helium`)
 - **Hyprland** with the **Dank Material Shell** (`dms`, COPR `avengemedia/dms`)
 
+The installer first asks for a network connection (Ethernet is detected
+automatically; otherwise pick a Wi-Fi network). Any NetworkManager profile
+created in the live session is copied to the installed system.
+
+The boot splash is a placeholder Plymouth theme (`jupiter`) written by the
+installer. Replace `SPLASH_FILES` in `installer/jupiter-installer.py` with your
+own artwork. GRUB and the wallpaper are unchanged.
+
 ## Layout
 
 | Path | Purpose |

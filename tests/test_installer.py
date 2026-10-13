@@ -59,6 +59,27 @@ class Plan(unittest.TestCase):
                     self.assertTrue(a.startswith("/dev/nvme0n1"), a)
 
 
+class Network(unittest.TestCase):
+    def test_parse_wifi_list(self):
+        text = "HomeNet:WPA2\nCafe\\:Guest:\n:hidden:WPA2\nHomeNet:WPA2\n"
+        self.assertEqual(inst.parse_wifi_list(text),
+                         [("Cafe:Guest", "open"), ("HomeNet", "WPA2")])
+
+    def test_wifi_list_no_networks(self):
+        self.assertEqual(inst.parse_wifi_list(""), [])
+
+
+class Splash(unittest.TestCase):
+    def test_theme_files_present(self):
+        self.assertEqual(set(inst.SPLASH_FILES),
+                         {"jupiter.plymouth", "jupiter.script"})
+        self.assertIn("ModuleName=script", inst.SPLASH_FILES["jupiter.plymouth"])
+
+    def test_plymouth_packages_in_base(self):
+        argv = dict(inst.build_plan("/dev/sda", "mesa"))["Installing Jupiter base (this takes a while)"]
+        self.assertIn("plymouth", argv)
+
+
 class Fstab(unittest.TestCase):
     def test_fstab(self):
         text = inst.fstab_text("ROOT-UUID", "ESP-UUID")
