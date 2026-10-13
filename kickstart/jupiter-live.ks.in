@@ -1,0 +1,52 @@
+# Jupiter live installer image (Fedora 43, x86_64) - TEMPLATE.
+# build/build-iso.sh fills in @INSTALLER_B64@ and @SERVICE_B64@.
+lang en_US.UTF-8
+keyboard us
+timezone UTC --utc
+network --bootproto=dhcp --device=link --activate --onboot=yes
+rootpw --lock
+selinux --enforcing
+firewall --enabled
+services --enabled=NetworkManager
+bootloader --location=none
+zerombr
+clearpart --all
+part / --size=6144 --fstype=ext4 --label=JUPITER-LIVE
+
+url --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=fedora-43&arch=$basearch
+repo --name=copr-dms --baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/dms/fedora-43-$basearch/
+repo --name=copr-danklinux --baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/danklinux/fedora-43-$basearch/
+repo --name=copr-helium --baseurl=https://download.copr.fedorainfracloud.org/results/imput/helium/fedora-43-$basearch/
+
+%packages --excludedocs
+@core
+kernel
+dnf
+dnf-plugins-core
+python3
+NetworkManager
+sudo
+gdisk
+parted
+dosfstools
+e2fsprogs
+util-linux
+grub2-efi-x64
+grub2-efi-x64-modules
+grub2-pc
+shim-x64
+efibootmgr
+glibc-langpack-en
+%end
+
+%post --erroronfail
+mkdir -p /usr/libexec/jupiter /etc/systemd/system
+echo '@INSTALLER_B64@' | base64 -d > /usr/libexec/jupiter/jupiter-installer.py
+chmod 0755 /usr/libexec/jupiter/jupiter-installer.py
+echo '@SERVICE_B64@' | base64 -d > /etc/systemd/system/jupiter-installer.service
+systemctl enable jupiter-installer.service
+# Marks this as the live environment so the installer unit only runs here.
+touch /etc/jupiter-live
+# Make the installer the boot screen on tty1 and keep a root shell on tty2.
+systemctl mask getty@tty1.service
+%end
