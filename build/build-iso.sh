@@ -36,6 +36,8 @@ ksvalidator -v F44 "$KS"
 # livemedia-creator refuses to run if --resultdir already exists, so let it
 # create a fresh directory inside the work dir and move the ISO out afterwards.
 RESULT="$WORK/result"
+# --tmp must already exist; livemedia-creator does not create it.
+mkdir -p "$WORK/lmc"
 livemedia-creator \
   --make-iso \
   --no-virt \
