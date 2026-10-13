@@ -43,6 +43,30 @@ glibc-langpack-en
 
 %post --erroronfail
 mkdir -p /usr/libexec/jupiter /etc/systemd/system
+# The installer runs dnf with reposdir=/etc/yum.repos.d to install the base
+# into the target, so the COPR repos must exist in the live image too.
+cat > /etc/yum.repos.d/jupiter-copr.repo <<'REPOEOF'
+[copr:copr.fedorainfracloud.org:avengemedia:dms]
+name=Copr repo for dms owned by avengemedia
+baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/dms/fedora-44-x86_64/
+enabled=1
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/avengemedia/dms/pubkey.gpg
+
+[copr:copr.fedorainfracloud.org:avengemedia:danklinux]
+name=Copr repo for danklinux owned by avengemedia
+baseurl=https://download.copr.fedorainfracloud.org/results/avengemedia/danklinux/fedora-44-x86_64/
+enabled=1
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/avengemedia/danklinux/pubkey.gpg
+
+[copr:copr.fedorainfracloud.org:imput:helium]
+name=Copr repo for helium owned by imput
+baseurl=https://download.copr.fedorainfracloud.org/results/imput/helium/fedora-44-x86_64/
+enabled=1
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/imput/helium/pubkey.gpg
+REPOEOF
 echo '@INSTALLER_B64@' | base64 -d > /usr/libexec/jupiter/jupiter-installer.py
 chmod 0755 /usr/libexec/jupiter/jupiter-installer.py
 echo '@SERVICE_B64@' | base64 -d > /etc/systemd/system/jupiter-installer.service

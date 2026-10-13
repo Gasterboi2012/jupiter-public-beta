@@ -428,13 +428,30 @@ def prompt_text(scr, title, subtitle="", secret=False, validator=None,
             buf += chr(key)
 
 
+def live_medium_disk():
+    """Name of the disk the live image was booted from (e.g. 'sdb'), or None.
+
+    dracut-live mounts the live image at /run/initramfs/live.
+    """
+    src = subprocess.run(["findmnt", "-no", "SOURCE", "/run/initramfs/live"],
+                         capture_output=True, text=True).stdout.strip()
+    if not src:
+        return None
+    parent = subprocess.run(["lsblk", "-no", "PKNAME", src],
+                            capture_output=True, text=True).stdout.strip()
+    return parent or os.path.basename(src)
+
+
 def list_disks():
     out = subprocess.run(
         ["lsblk", "-J", "-d", "-o", "NAME,SIZE,MODEL,TYPE"],
         capture_output=True, text=True).stdout or "{}"
     data = json.loads(out)
+    live = live_medium_disk()
     disks = []
     for dev in data.get("blockdevices", []):
+        if dev["name"] == live:
+            continue
         if dev.get("type") == "disk" and not dev["name"].startswith(("loop", "sr", "zram")):
             disks.append((f"/dev/{dev['name']}", dev.get("size", "?"),
                           (dev.get("model") or "").strip()))
@@ -612,6 +629,8 @@ def write_user_dotfiles(user, dry):
 
 def install(cfg, dry):
     gpu, disk, user, pw = cfg["gpu"], cfg["disk"], cfg["username"], cfg["password"]
+    if not dry:
+        os.makedirs(TARGET, exist_ok=True)
     for desc, argv in build_plan(disk, gpu):
         if run_step(desc, argv, dry) != 0:
             return 1
@@ -627,12 +646,13 @@ def install(cfg, dry):
             fh.write(fstab_text(root, esp))
     if not dry:
         copy_network_profiles()
-    if install_nerd_font(dry) != 0:
-        return 1
     for desc, argv in post_install_plan(user, gpu):
         stdin_text = f"{user}:{pw}\n" if desc == "Setting user password" else None
         if run_step(desc, argv, dry, stdin_text) != 0:
             return 1
+    # After the chroot mounts above, so fc-cache sees /proc and /dev.
+    if install_nerd_font(dry) != 0:
+        return 1
     if dry:
         print("    [dry-run] write Plymouth theme 'jupiter' and rebuild initramfs")
     else:
