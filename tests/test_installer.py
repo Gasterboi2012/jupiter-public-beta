@@ -80,6 +80,30 @@ class Splash(unittest.TestCase):
         self.assertIn("plymouth", argv)
 
 
+class Terminal(unittest.TestCase):
+    def test_font_pin_is_sha256(self):
+        self.assertRegex(inst.NERD_FONT_SHA256, r"^[0-9a-f]{64}$")
+        self.assertIn("v3.5.1", inst.NERD_FONT_URL)
+
+    def test_foot_uses_nerd_font_family(self):
+        # fontconfig family name of IosevkaNerdFontMono (checked from the TTF name table)
+        self.assertIn("font=Iosevka Nerd Font Mono:", inst.FOOT_INI)
+
+    def test_fastfetch_config_is_valid_json(self):
+        import json
+        cfg = json.loads(inst.FASTFETCH_JSONC.format(user="alice"))
+        self.assertEqual(cfg["logo"]["source"], "/home/alice/.config/fastfetch/logo.txt")
+        self.assertIn("os", cfg["modules"])
+
+    def test_logo_has_backslashes_intact(self):
+        self.assertIn("/\\", inst.FASTFETCH_LOGO)
+
+    def test_fonts_and_fastfetch_in_base(self):
+        argv = dict(inst.build_plan("/dev/sda", "mesa"))["Installing Jupiter base (this takes a while)"]
+        self.assertIn("fastfetch", argv)
+        self.assertIn("fontconfig", argv)
+
+
 class Fstab(unittest.TestCase):
     def test_fstab(self):
         text = inst.fstab_text("ROOT-UUID", "ESP-UUID")

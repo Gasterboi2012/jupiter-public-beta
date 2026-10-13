@@ -11,6 +11,7 @@ Dank Material Shell (DMS) desktop, via dnf into the target root.
 import argparse
 import curses
 import getpass
+import hashlib
 import json
 import os
 import shutil
@@ -18,7 +19,9 @@ import re
 import shlex
 import subprocess
 import sys
+import tarfile
 import textwrap
+import urllib.request
 
 RELEASE = "43"
 TARGET = "/mnt/jupiter"
@@ -37,6 +40,7 @@ BASE_PACKAGES = [
     "hyprland", "xdg-desktop-portal-hyprland", "sddm", "foot",
     "pipewire", "wireplumber", "grim", "slurp", "wl-clipboard",
     "google-noto-sans-fonts", "papirus-icon-theme", "plymouth", "plymouth-scripts",
+    "fontconfig", "fastfetch",
     # Dank Material Shell (DMS) + Quickshell
     "dms", "quickshell", "dgop", "matugen", "cava",
     # Browser
@@ -67,6 +71,51 @@ logo.SetY(Window.GetY() + Window.GetHeight() / 2 - logo.GetHeight() / 2);
 sprite = Sprite(logo);
 """,
 }
+
+# Iosevka Nerd Font (Mono), pinned release. Fedora does not package Nerd Fonts,
+# so the installer downloads this archive and checks its SHA-256.
+NERD_FONT_URL = ("https://github.com/ryanoasis/nerd-fonts/releases/download/"
+                 "v3.5.1/Iosevka.tar.xz")
+NERD_FONT_SHA256 = "3b94ea1dc3955756762f977b7677bca671947dd56bc755a6f8465a8e83b5f257"
+NERD_FONT_DIR = "/usr/share/fonts/iosevka-nerd-font"
+TERMINAL_FONT = "Iosevka Nerd Font Mono:size=12"
+
+# Placeholder ASCII logo for fastfetch. Replace with your own later.
+FASTFETCH_LOGO = r"""
+      /\      
+     /  \     JUPITER
+    /____\    placeholder logo
+   /\    /\   
+  /  \  /  \  
+ /____\/____\ 
+"""
+
+FOOT_INI = f"""\
+# Jupiter default terminal (foot). Edit freely.
+[main]
+font={TERMINAL_FONT}
+pad=12x12
+term=foot
+
+[cursor]
+style=beam
+blink=yes
+"""
+
+FASTFETCH_JSONC = """\
+{{
+  "logo": {{
+    "type": "file",
+    "source": "/home/{user}/.config/fastfetch/logo.txt",
+    "padding": {{ "right": 2 }}
+  }},
+  "display": {{ "separator": "  " }},
+  "modules": [
+    "title", "separator", "os", "host", "kernel", "uptime",
+    "packages", "shell", "wm", "terminal", "cpu", "gpu", "memory", "break", "colors"
+  ]
+}}
+"""
 
 NVIDIA_PACKAGES = ["akmod-nvidia-open", "xorg-x11-drv-nvidia-cuda"]
 NVIDIA_KARGS = "nvidia-drm.modeset=1 nvidia-drm.fbdev=1"
@@ -505,6 +554,62 @@ def tui_flow(scr):
     return {"gpu": gpu, "disk": disk, "username": username, "password": pw}
 
 
+def install_nerd_font(dry):
+    """Download the pinned Iosevka Nerd Font, verify it, and install it."""
+    if dry:
+        print(f"    [dry-run] fetch {NERD_FONT_URL} and install to {NERD_FONT_DIR}")
+        return 0
+    archive = "/tmp/iosevka-nerd-font.tar.xz"
+    print("\033[1;35m==>\033[0m Downloading Iosevka Nerd Font")
+    try:
+        urllib.request.urlretrieve(NERD_FONT_URL, archive)
+    except OSError as exc:
+        print(f"\033[1;31m    font download failed: {exc}\033[0m")
+        return 1
+    with open(archive, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    if digest != NERD_FONT_SHA256:
+        print("\033[1;31m    font checksum mismatch, refusing to install.\033[0m")
+        return 1
+    dest = f"{TARGET}{NERD_FONT_DIR}"
+    os.makedirs(dest, exist_ok=True)
+    with tarfile.open(archive, "r:xz") as tar:
+        members = [m for m in tar.getmembers()
+                   if m.isfile() and m.name.lower().endswith((".ttf", ".otf"))
+                   and "Mono" in os.path.basename(m.name)]
+        for m in members:
+            m.name = os.path.basename(m.name)
+            tar.extract(m, dest, filter="data")
+    return run_step("Refreshing font cache",
+                    chroot(["fc-cache", "-f", NERD_FONT_DIR]), dry)
+
+
+def write_user_dotfiles(user, dry):
+    """Foot terminal config and fastfetch config for the new user."""
+    home = f"{TARGET}/home/{user}"
+    files = {
+        f"{home}/.config/foot/foot.ini": FOOT_INI,
+        f"{home}/.config/fastfetch/config.jsonc":
+            FASTFETCH_JSONC.format(user=user),
+        f"{home}/.config/fastfetch/logo.txt": FASTFETCH_LOGO,
+    }
+    if dry:
+        for path in files:
+            print(f"    [dry-run] write {path}")
+        return 0
+    for path, body in files.items():
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write(body)
+    # Show fastfetch in new interactive shells.
+    with open(f"{home}/.bashrc", "a") as fh:
+        fh.write("\n# Jupiter: system info on interactive shells\n"
+                 "[[ $- == *i* ]] && command -v fastfetch >/dev/null && fastfetch\n")
+    subprocess.run(chroot(["chown", "-R", f"{user}:{user}", f"/home/{user}"]),
+                   check=True)
+    return 0
+
+
 def install(cfg, dry):
     gpu, disk, user, pw = cfg["gpu"], cfg["disk"], cfg["username"], cfg["password"]
     for desc, argv in build_plan(disk, gpu):
@@ -522,6 +627,8 @@ def install(cfg, dry):
             fh.write(fstab_text(root, esp))
     if not dry:
         copy_network_profiles()
+    if install_nerd_font(dry) != 0:
+        return 1
     for desc, argv in post_install_plan(user, gpu):
         stdin_text = f"{user}:{pw}\n" if desc == "Setting user password" else None
         if run_step(desc, argv, dry, stdin_text) != 0:
@@ -538,6 +645,8 @@ def install(cfg, dry):
                     chroot(["plymouth-set-default-theme", "-R", SPLASH_NAME]),
                     dry) != 0:
             return 1
+    if write_user_dotfiles(user, dry) != 0:
+        return 1
     home = f"{TARGET}/home/{user}/.config/hypr"
     if dry:
         print(f"    [dry-run] write {home}/hyprland.conf")

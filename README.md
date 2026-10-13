@@ -11,6 +11,10 @@ The installer first asks for a network connection (Ethernet is detected
 automatically; otherwise pick a Wi-Fi network). Any NetworkManager profile
 created in the live session is copied to the installed system.
 
+The installer also downloads **Iosevka Nerd Font Mono** (v3.5.1, SHA-256 checked)
+and sets it as the default terminal font for **foot**. A minimal **fastfetch**
+config with a placeholder ASCII logo runs in new interactive shells.
+
 The boot splash is a placeholder Plymouth theme (`jupiter`) written by the
 installer. Replace `SPLASH_FILES` in `installer/jupiter-installer.py` with your
 own artwork. GRUB and the wallpaper are unchanged.
